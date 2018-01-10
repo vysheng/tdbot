@@ -93,25 +93,24 @@ std::string get_config_directory () /* {{{ */ {
 void parse_config () /* {{{ */ {
   //config_filename = make_full_path (config_filename);
   /// Is test Telegram environment should be used instead of the production environment.
-  param.is_test_dc = false;
+  param.use_test_dc = false;
   /// Application identifier for Telegram API access, can be obtained at https://my.telegram.org.
   param.api_id = TELEGRAM_CLI_API_ID;
   /// Application identifier hash for Telegram API access, can be obtained at https://my.telegram.org.
   param.api_hash = TELEGRAM_CLI_API_HASH;
   /// IETF language tag of users language.
-  param.language_code = "en";
+  //param.language_code = "en";
   /// Model of a device application is run on.
-  param.device_model = "Console";
+  //param.device_model = "Console";
   /// Version of an operating system application is run on.
-  param.system_version = "UNIX/XX";
+  //param.system_version = "UNIX/XX";
   /// Application version.
-  param.app_version = TELEGRAM_CLI_VERSION;
+  //param.app_version = TELEGRAM_CLI_VERSION;
   /// If set to false, information about files will be lost on application restart.
   param.use_file_db = true;
   /// If set to true, old files will be automatically deleted.
-  param.use_file_gc = false;
-  /// By default, files are saved under their original names. If set to false, original file name will be ignored.
-  param.file_readable_names = true;
+  //param.use_file_gc = false;
+  param.ignore_file_names = false;
   /// By default, secret chats support is disabled. Set to true to enable secret chats support.
   param.use_secret_chats = true;
   /// If set to true, the library will maintain cache of users, groups, channels and secret chats. Implies use_file_db.
@@ -175,7 +174,7 @@ void parse_config () /* {{{ */ {
   try {
     bool test_mode = false;
     conf.lookupValue (prefix + "test", test_mode);
-    param.is_test_dc = test_mode;
+    param.use_test_dc = test_mode;
   } catch (const libconfig::SettingNotFoundException &) {}
   
   try {
@@ -188,21 +187,21 @@ void parse_config () /* {{{ */ {
     }
   } catch (const libconfig::SettingNotFoundException &) {}
   
-  try {
-    conf.lookupValue (prefix + "language_code", param.language_code);
-  } catch (const libconfig::SettingNotFoundException &) {}
+  //try {
+  //  conf.lookupValue (prefix + "language_code", param.language_code);
+  //} catch (const libconfig::SettingNotFoundException &) {}
   
   try {
     conf.lookupValue (prefix + "use_file_db", param.use_file_db);
   } catch (const libconfig::SettingNotFoundException &) {}
   
-  try {
-    conf.lookupValue (prefix + "use_file_gc", param.use_file_gc);
-  } catch (const libconfig::SettingNotFoundException &) {}
+  //try {
+  //  conf.lookupValue (prefix + "use_file_gc", param.use_file_gc);
+  //} catch (const libconfig::SettingNotFoundException &) {}
   
-  try {
-    conf.lookupValue (prefix + "file_readable_names", param.file_readable_names);
-  } catch (const libconfig::SettingNotFoundException &) {}
+  //try {
+  //  conf.lookupValue (prefix + "file_readable_names", param.file_readable_names);
+  //} catch (const libconfig::SettingNotFoundException &) {}
   
   try {
     conf.lookupValue (prefix + "use_secret_chats", param.use_secret_chats);

@@ -18,8 +18,8 @@ class CliLua {
 };
 
 class TdLuaCallback : public TdQueryCallback {
-  void on_result (td::tl_object_storage<td::td_api::Object> result) override;
-  void on_error (td::tl_object_storage<td::td_api::error> error) override {
+  void on_result (td::tl_object_ptr<td::td_api::Object> result) override;
+  void on_error (td::tl_object_ptr<td::td_api::error> error) override {
     on_result (td::move_tl_object_as<td::td_api::Object> (error));
   }
 

@@ -15,6 +15,7 @@
 #include <unistd.h>
 #endif
 
+#include "telegram.h"
 #include "cliclient.hpp"
 #include "clilua.hpp"
 #include "td/utils/Slice.h"
@@ -167,25 +168,33 @@ void CliStdFd::sock_close (td::uint64 id) {
 
 
 void CliClient::authentificate_restart () {
-  send_request (td::create_tl_object<td::td_api::getAuthState>(), std::make_unique<TdAuthStateCallback>());
+  //send_request (td::make_tl_object<td::td_api::getAuthorizationState>(), std::make_unique<TdAuthorizationStateCallback>());
 }
 
-void CliClient::login_continue (const td::td_api::authStateOk &result) {
+void CliClient::login_continue (const td::td_api::authorizationStateReady &result) {
   std::cout << "logged in successfully\n";
 
-  td_.reset();
-  close_flag_ = true;
-}
-
-void CliClient::login_continue (const td::td_api::authStateWaitPhoneNumber &result) {
-  if (phone_.length () > 0) {
-    send_request (td::create_tl_object<td::td_api::setAuthPhoneNumber>(phone_, false, false), std::make_unique<TdAuthStateCallback>());
-  } else {
-    send_request (td::create_tl_object<td::td_api::checkAuthBotToken>(bot_hash_), std::make_unique<TdAuthStateCallback>());
+  if (login_mode_) {
+    td_.reset();
+    close_flag_ = true;
   }
 }
 
-void CliClient::login_continue (const td::td_api::authStateWaitCode &R) {
+void CliClient::login_continue (const td::td_api::authorizationStateWaitPhoneNumber &result) {
+  if (!login_mode_) {
+    LOG(FATAL) << "not logged in. Try running with --login option";
+  }
+  if (phone_.length () > 0) {
+    send_request (td::make_tl_object<td::td_api::setAuthenticationPhoneNumber>(phone_, false, false), std::make_unique<TdAuthorizationStateCallback>());
+  } else {
+    send_request (td::make_tl_object<td::td_api::checkAuthenticationBotToken>(bot_hash_), std::make_unique<TdAuthorizationStateCallback>());
+  }
+}
+
+void CliClient::login_continue (const td::td_api::authorizationStateWaitCode &R) {
+  if (!login_mode_) {
+    LOG(FATAL) << "not logged in. Try running with --login option";
+  }
   if (R.is_registered_) {
     std::cout << "code: ";
     set_stdin_echo (false);
@@ -194,7 +203,7 @@ void CliClient::login_continue (const td::td_api::authStateWaitCode &R) {
     set_stdin_echo (true);
     std::cout << "\n";
     
-    send_request (td::create_tl_object<td::td_api::checkAuthCode>(code,"",""), std::make_unique<TdAuthStateCallback>());
+    send_request (td::make_tl_object<td::td_api::checkAuthenticationCode>(code,"",""), std::make_unique<TdAuthorizationStateCallback>());
   } else {
     std::string first_name;
     std::string last_name;
@@ -212,11 +221,14 @@ void CliClient::login_continue (const td::td_api::authStateWaitCode &R) {
     set_stdin_echo (true);
     std::cout << "\n";
     
-    send_request (td::create_tl_object<td::td_api::checkAuthCode>(code, first_name, last_name), std::make_unique<TdAuthStateCallback>());
+    send_request (td::make_tl_object<td::td_api::checkAuthenticationCode>(code, first_name, last_name), std::make_unique<TdAuthorizationStateCallback>());
   }
 }
 
-void CliClient::login_continue (const td::td_api::authStateWaitPassword &result) {
+void CliClient::login_continue (const td::td_api::authorizationStateWaitPassword &result) {
+  if (!login_mode_) {
+    LOG(FATAL) << "not logged in. Try running with --login option";
+  }
   std::cout << "password: ";
   set_stdin_echo (false);
   std::string password;
@@ -224,30 +236,43 @@ void CliClient::login_continue (const td::td_api::authStateWaitPassword &result)
   set_stdin_echo (true);
   std::cout << "\n";
 
-  send_request (td::create_tl_object<td::td_api::checkAuthPassword>(password), std::make_unique<TdAuthStateCallback>());
+  send_request (td::make_tl_object<td::td_api::checkAuthenticationPassword>(password), std::make_unique<TdAuthorizationStateCallback>());
 }
 
-void CliClient::login_continue (const td::td_api::authStateLoggingOut &result) {
+void CliClient::login_continue (const td::td_api::authorizationStateLoggingOut &result) {
   std::cout << "logging out\n";
-  sleep (1);
-  
-  send_request (td::create_tl_object<td::td_api::getAuthState>(), std::make_unique<TdAuthStateCallback>());
 }
 
-void CliClient::authentificate_continue (td::tl_object_storage<td::td_api::AuthState> result) {
-  if (!login_mode_ && result->get_id () != td::td_api::authStateOk::ID) {
-    std::cout << "not logged in. Try to run telegram-cli with --login option\n";
-    exit (2);
-  }
-  if (!login_mode_) {
-    return;
-  }
-  downcast_call (*result.get (), [&](auto &object){this->login_continue (object);});
+void CliClient::login_continue (const td::td_api::authorizationStateClosing &result) {
+  std::cout << "closing\n";
 }
 
-void CliClient::on_update (td::tl_object_storage<td::td_api::Update> update) {
+void CliClient::login_continue (const td::td_api::authorizationStateClosed &result) {
+  std::cout << "closed\n";
+}
+
+void CliClient::login_continue (const td::td_api::authorizationStateWaitTdlibParameters &result) {
+//tdlibParameters use_test_dc:Bool database_directory:string files_directory:string use_file_database:Bool use_chat_info_database:Bool use_message_database:Bool use_secret_chats:Bool api_id:int32 api_hash:string system_language_code:string device_model:string system_version:string application_version:string enable_storage_optimizer:Bool ignore_file_names:Bool = TdlibParameters;
+  send_request (td::make_tl_object<td::td_api::setTdlibParameters>(td::make_tl_object<td::td_api::tdlibParameters>(param_.use_test_dc, param_.database_directory, param_.files_directory, true, true, true, true, param_.api_id, param_.api_hash, "en", "Unix/Console/Bot", "UNIX/??", TELEGRAM_CLI_VERSION, false, param_.ignore_file_names)), std::make_unique<TdAuthorizationStateCallback>());
+}
+
+void CliClient::login_continue (const td::td_api::authorizationStateWaitEncryptionKey &result) {
+  send_request (td::make_tl_object<td::td_api::checkDatabaseEncryptionKey>(""), std::make_unique<TdAuthorizationStateCallback>());
+}
+
+void CliClient::authentificate_continue (td::td_api::AuthorizationState &result) {
+  downcast_call (result, [&](auto &object){this->login_continue (object);});
+}
+
+void CliClient::on_update (td::tl_object_ptr<td::td_api::Update> update) {
+  if (update->get_id () == td::td_api::updateAuthorizationState::ID) {
+    auto t = td::move_tl_object_as<td::td_api::updateAuthorizationState>(update);
+    authentificate_continue (*t->authorization_state_);
+    update = td::move_tl_object_as<td::td_api::Update>(t);
+
+  }
   std::string v = td::json_encode<std::string>(td::ToJson (update));
-  
+
   fds_.for_each ([&](td::uint64 id, auto &x) {  
     x.get()->write (v);
     x.get()->work (id);
@@ -257,7 +282,7 @@ void CliClient::on_update (td::tl_object_storage<td::td_api::Update> update) {
     clua_->update (v); 
   }
 }
-void CliClient::on_result (td::uint64 id, td::tl_object_storage<td::td_api::Object> result) {
+void CliClient::on_result (td::uint64 id, td::tl_object_ptr<td::td_api::Object> result) {
   if (id == 0) {
     on_update (td::move_tl_object_as<td::td_api::Update>(result));
     return;
@@ -269,7 +294,7 @@ void CliClient::on_result (td::uint64 id, td::tl_object_storage<td::td_api::Obje
   handler->on_result(std::move(result));
   handlers_.erase(id);
 }
-void CliClient::on_error (td::uint64 id, td::tl_object_storage<td::td_api::error> error) {
+void CliClient::on_error (td::uint64 id, td::tl_object_ptr<td::td_api::error> error) {
   auto *handler_ptr = handlers_.get(id);
   CHECK(handler_ptr != nullptr);
   auto handler = std::move(*handler_ptr);
@@ -312,17 +337,14 @@ std::unique_ptr<td::TdCallback> CliClient::make_td_callback() {
     public:
       explicit TdCallbackImpl(CliClient *client) : client_(client) {
       }
-      void on_result(td::uint64 id, td::tl_object_storage<td::td_api::Object> result) override {
+      void on_result(td::uint64 id, td::tl_object_ptr<td::td_api::Object> result) override {
         client_->on_result(id, std::move(result));
       }
-      void on_error(td::uint64 id, td::tl_object_storage<td::td_api::error> error) override {
+      void on_error(td::uint64 id, td::tl_object_ptr<td::td_api::error> error) override {
         client_->on_error(id, std::move(error));
       }
-      void on_before_close() override {
-        client_->on_before_close();
-      }
       void on_closed() override {
-        client_->on_closed();
+        client_->on_closed ();
       }
 
     private:

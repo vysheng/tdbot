@@ -12,20 +12,21 @@
 #include "td/tl/TlObject.h"
 #include "td/utils/port/ServerSocketFd.h"
 #include "td/utils/Container.h"
+#include "td/telegram/TdParameters.h"
 
-#include "auto/tl/td_api.h"
-#include "auto/tl/td_api.hpp"
+#include "auto/td/telegram/td_api.h"
+#include "auto/td/telegram/td_api.hpp"
 
 #include "td/tl/tl_json.h"
-#include "auto/tl/td_api_json.h"
+#include "auto/td/telegram/td_api_json.h"
 
 
 class CliLua;
 
 class TdQueryCallback {
   public:
-    virtual void on_result(td::tl_object_storage<td::td_api::Object> result) = 0;    
-    virtual void on_error(td::tl_object_storage<td::td_api::error> error) = 0;
+    virtual void on_result(td::tl_object_ptr<td::td_api::Object> result) = 0;    
+    virtual void on_error(td::tl_object_ptr<td::td_api::error> error) = 0;
     virtual ~TdQueryCallback() {
     }
 };
@@ -82,17 +83,17 @@ class CliClient final : public td::Actor {
   explicit CliClient(int port, std::string addr, std::string lua_script, bool login_mode, std::string phone, std::string bot_hash, td::TdParameters param) : port_(port), addr_(addr), lua_script_(lua_script), login_mode_ (login_mode), phone_ (phone), bot_hash_ (bot_hash), param_(param) {
   }
 
-  class TdAuthStateCallback : public TdQueryCallback {
-    void on_result (td::tl_object_storage<td::td_api::Object> result) override {
-      instance_->authentificate_continue (td::move_tl_object_as<td::td_api::AuthState>(result));
+  class TdAuthorizationStateCallback : public TdQueryCallback {
+    void on_result (td::tl_object_ptr<td::td_api::Object> result) override {
+      CHECK (result->get_id () == td::td_api::ok::ID);
     }
-    void on_error (td::tl_object_storage<td::td_api::error> error) override {
+    void on_error (td::tl_object_ptr<td::td_api::error> error) override {
       instance_->authentificate_restart ();
     }
   };
 
   class TdCmdCallback : public TdQueryCallback {
-    void on_result (td::tl_object_storage<td::td_api::Object> result) override {
+    void on_result (td::tl_object_ptr<td::td_api::Object> result) override {
       auto T = cli_->fds_.get (id_);
       if (T) {
         std::string v = td::json_encode<std::string>(td::ToJson (result));
@@ -100,7 +101,7 @@ class CliClient final : public td::Actor {
         T->get ()->work (id_);
       }
     }
-    void on_error (td::tl_object_storage<td::td_api::error> error) override {
+    void on_error (td::tl_object_ptr<td::td_api::error> error) override {
       on_result (td::move_tl_object_as<td::td_api::Object> (error));
     }
 
@@ -114,7 +115,7 @@ class CliClient final : public td::Actor {
   };
 
   
-  void send_request(td::tl_object_storage<td::td_api::Function> f, std::unique_ptr<TdQueryCallback> handler) {
+  void send_request(td::tl_object_ptr<td::td_api::Function> f, std::unique_ptr<TdQueryCallback> handler) {
     auto id = handlers_.create(std::move(handler));
     if (!td_.empty()) {
       send_closure(td_, &td::ClientActor::request, id, std::move(f));
@@ -140,7 +141,7 @@ class CliClient final : public td::Actor {
    
     if (res.is_ok ()) {
       auto as_json_value = res.move_as_ok ();
-      td::td_api::object_storage<td::td_api::Function> object;
+      td::tl_object_ptr<td::td_api::Function> object;
       
       auto r = from_json(object, as_json_value);
       
@@ -171,20 +172,24 @@ class CliClient final : public td::Actor {
 
  private:
   void authentificate_restart ();
-  void authentificate_continue (td::tl_object_storage<td::td_api::AuthState> result);
-  void login_continue (const td::td_api::authStateOk &result);
-  void login_continue (const td::td_api::authStateWaitPhoneNumber &result);
-  void login_continue (const td::td_api::authStateWaitCode &result);
-  void login_continue (const td::td_api::authStateWaitPassword &result);
-  void login_continue (const td::td_api::authStateLoggingOut &result);
+  void authentificate_continue (td::td_api::AuthorizationState &state);
+  void login_continue (const td::td_api::authorizationStateReady &result);
+  void login_continue (const td::td_api::authorizationStateWaitTdlibParameters &result);
+  void login_continue (const td::td_api::authorizationStateWaitPhoneNumber &result);
+  void login_continue (const td::td_api::authorizationStateWaitCode &result);
+  void login_continue (const td::td_api::authorizationStateWaitPassword &result);
+  void login_continue (const td::td_api::authorizationStateLoggingOut &result);
+  void login_continue (const td::td_api::authorizationStateWaitEncryptionKey &result);
+  void login_continue (const td::td_api::authorizationStateClosing &result);
+  void login_continue (const td::td_api::authorizationStateClosed &result);
 
   void start_up() override {
     yield();
   }
   
-  void on_update (td::tl_object_storage<td::td_api::Update> update);
-  void on_result (td::uint64 id, td::tl_object_storage<td::td_api::Object> result);
-  void on_error (td::uint64 id, td::tl_object_storage<td::td_api::error> error);
+  void on_update (td::tl_object_ptr<td::td_api::Update> update);
+  void on_result (td::uint64 id, td::tl_object_ptr<td::td_api::Object> result);
+  void on_error (td::uint64 id, td::tl_object_ptr<td::td_api::error> error);
 
   void on_before_close() {
     td_.reset();
@@ -204,7 +209,7 @@ class CliClient final : public td::Actor {
   std::unique_ptr<td::TdCallback> make_td_callback();
   
   void init_td() {
-    td_ = td::create_actor<td::ClientActor>("TD-proxy", make_td_callback(), param_);
+    td_ = td::create_actor<td::ClientActor>(td::Slice ("TDPROXY"), make_td_callback());
   }
 
   void init ();

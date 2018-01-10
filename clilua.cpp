@@ -135,7 +135,7 @@ int lua_parse_function (lua_State *L) {
 
   if (res.is_ok ()) {
     auto as_json_value = res.move_as_ok ();
-    td::td_api::object_storage<td::td_api::Function> object;
+    td::tl_object_ptr<td::td_api::Function> object;
 
     auto r = from_json(object, as_json_value);
   
@@ -188,7 +188,7 @@ void CliLua::update (std::string update) {
 
 }
   
-void TdLuaCallback::on_result (td::tl_object_storage<td::td_api::Object> result) {
+void TdLuaCallback::on_result (td::tl_object_ptr<td::td_api::Object> result) {
   std::string v = td::json_encode<std::string>(td::ToJson (result));
 
   clua_->result (v, a1_, a2_);
