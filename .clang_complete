@@ -1,0 +1,8 @@
+-iquote td
+-iquote td/tdtl
+-iquote td/tdutils
+-iquote td/tdactor
+-iquote td/td/generate
+-iquote td/td/generate/default_td_api
+-I /usr/include/lua5.1
+-std=c++14
