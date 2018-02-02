@@ -14,6 +14,7 @@
 #include "td/utils/FileLog.h"
 #include "td/actor/actor.h"
 #include "td/utils/port/signals.h"
+#include "td/utils/port/path.h"
 
 #include "telegram.h"
 #include "cliclient.hpp"
