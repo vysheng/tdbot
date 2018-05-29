@@ -12,7 +12,7 @@ A userbot interface for [Telegram](http://telegram.org). Uses [TDLib](https://gi
 
 #### Linux and BSDs
 
-Install utils and libs: git, cmake, libssl, liblua, liblua, gperf, libconfig.
+Install utils and libs: git, cmake, libssl, liblua, gperf, libconfig.
 
 On Ubuntu/Debian use:
 
@@ -26,25 +26,33 @@ sudo apt install git build-essential cmake libssl-dev liblua5.2-dev gperf libcon
     git clone --recursive https://github.com/vysheng/tdbot.git
     ```
 
-2.  Create build folder
+2.  Optional. Update `td` submodule.
+
+    ```sh
+    cd tdbot
+    git submodule update --remote --merge
+    cd ..
+    ```
+
+3.  Create build folder
 
     ```sh
     mkdir tdbot-build
     ```
 
-3.  Enter build folder
+4.  Enter build folder
 
     ```sh
     cd tdbot-build
     ```
 
-4.  Configure
+5.  Configure
 
     ```sh
     cmake -DCMAKE_BUILD_TYPE=Release ../tdbot
     ```
 
-5.  Start build process
+6.  Start build process
 
     ```sh
     make telegram-bot
@@ -70,10 +78,44 @@ To understand how to serialize commands you need to read examples and tl scheme.
 
 ### examples
 
-1.  Json response
+1.  Json response (prettyfied)
 
-    ```json
-    {"_":"sendMessage", "chat_id":1007779878, "reply_to_message_id":0, "disable_notification":0, "from_background":0, "input_message_content":{"_":"inputMessageText", "text":"Test text here", "disable_web_preview":0, "clear_draft":0, "entities":[]}}
+    ```javascript
+    {
+      ["@type"] = "updateNewMessage",
+      contains_mention = false,
+      disable_notification = true,
+      message = {
+        ["@type"] = "message",
+        author_signature = "",
+        can_be_deleted_for_all_users = true,
+        can_be_deleted_only_for_self = false,
+        can_be_edited = true,
+        can_be_forwarded = true,
+        chat_id = "-1001234567890",
+        contains_unread_mention = false,
+        content = {
+          ["@type"] = "messageText",
+          text = {
+            ["@type"] = "formattedText",
+            entities = {},
+            text = "test"
+          }
+        },
+        date = 1527571645,
+        edit_date = 0,
+        id = 583008256,
+        is_channel_post = false,
+        is_outgoing = true,
+        media_album_id = "0",
+        reply_to_message_id = 0,
+        sender_user_id = 123456789,
+        ttl = 0,
+        ttl_expires_in = 0,
+        via_bot_user_id = 0,
+        views = 0
+      }
+    }
     ```
 
 1.  Configuration file
@@ -194,15 +236,29 @@ To understand how to serialize commands you need to read examples and tl scheme.
     end
 
     function tdbot_update_callback (data)
-      if (data._ == "updateNewMessage") then
+      if (data["@type"] == "updateNewMessage") then
         local msg = data.message
 
-        if msg.content._ == "messageText" then
+        if msg.content["@type"] == "messageText" then
           if msg.content.text == "ping" then
-            assert (tdbot_function ({_="sendMessage", chat_id=msg.chat_id, reply_to_message_id=msg.id, disable_notification=false, from_background=true, reply_markup=nil, input_message_content={_="inputMessageText", text="pong", disable_web_page_preview=true, clear_draft=false, entities={}, parse_mode=nil}}, dl_cb, nil))
+            assert (tdbot_function ({
+              ["@type"] = "sendMessage",
+              chat_id = msg.chat_id,
+              reply_to_message_id = msg.id,
+              disable_notification = 0,
+              from_background = 1,
+              reply_markup = nil,
+              input_message_content = {
+                ["@type"] = "inputMessageText",
+                text = "pong",
+                disable_web_page_preview = 1,
+                clear_draft = 0,
+                entities = {},
+                parse_mode = nil
+              }
+            }
           end
         end
       end
     end
     ```
-
