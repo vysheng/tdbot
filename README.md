@@ -12,7 +12,7 @@ A userbot interface for [Telegram](http://telegram.org). Uses [TDLib](https://gi
 
 #### Linux and BSDs
 
-Install utils and libs: git, cmake, libssl, liblua, gperf, libconfig.
+Install utils and libs: `git`, `cmake`, `libssl`, `liblua`, `gperf`, `libconfig`.
 
 On Ubuntu/Debian use:
 
@@ -20,13 +20,15 @@ On Ubuntu/Debian use:
 sudo apt install git build-essential cmake libssl-dev liblua5.2-dev gperf libconfig++-dev
 ```
 
+Note: On Ubuntu, `gperf` is in its universe repository. So, make sure to enable this repository.
+
 1.  Clone GitHub Repository
 
     ```sh
-    git clone --recursive https://github.com/vysheng/tdbot.git
+    git clone --recursive https://github.com/rizaumami/tdbot.git
     ```
 
-2.  Optional. Update `td` submodule.
+1.  Optional, but highly recommended. Update `td` submodule.
 
     ```sh
     cd tdbot
@@ -34,53 +36,81 @@ sudo apt install git build-essential cmake libssl-dev liblua5.2-dev gperf libcon
     cd ..
     ```
 
-3.  Create build folder
+1.  Create build folder
 
     ```sh
     mkdir tdbot-build
     ```
 
-4.  Enter build folder
+1.  Enter build folder
 
     ```sh
     cd tdbot-build
     ```
 
-5.  Configure
+1.  Configure
 
     ```sh
     cmake -DCMAKE_BUILD_TYPE=Release ../tdbot
     ```
 
-6.  Start build process
+1.  Start build process
 
     ```sh
     make telegram-bot
     ```
 
+1.  The compiled `telegram-bot` binary can be found inside `tdbot-build` folder. 
+    
 ### Usage
 
 1.  First of all you need to create config. Default config name is `config` which is located in `${HOME}/.telegram-bot/` or `${HOME}/.config/telegram-bot/`.
-2.  Then you need to login. If you want to login as bot you need to run:
+1.  Then you need to login. You can login as:
 
-    ```sh
-    telegram-bot -p profile-name --login --bot=bot-token
-    ```
+    1. Bot.
 
-    And, if you want to login as user you need to run:
+        ```sh
+        telegram-bot -p profile-name --login --bot=BOT-TOKEN
+        ```
+  
+    1. User.
 
-    ```sh
-    telegram-bot -p profile-name --login --phone=phone-number
-    ```
+        ```sh
+        telegram-bot -p profile-name --login --phone=PHONE-NUMBER
+        ```
 
-3.  Now you can run commands. There are two ways to do it, you can use: (1) json interface (via stdin or tcp connections), or (2) lua script.\
-To understand how to serialize commands you need to read examples and tl scheme.
+        Use country code in the `PHONE-NUMBER`. Example: `621234567890`, where `+62` is code for Indonesia.
+        
+1.  Now you can run commands. There are two ways to do it:
+
+    1. Use JSON interface (via stdin or tcp connections)
+    
+        1.  Run `telegram-bot` as a daemon.  
+            Example, to run `telegram-bot` as a daemon and listening to port `1337`:
+        
+            ```sh
+            telegram-bot -dP 1337
+            ```
+            
+        1.  Enter a JSON formatted message:
+        
+            ```sh
+            echo -e '{"@type":"sendMessage","chat_id":-1001234567890,"input_message_content":{"@type":"inputMessageText","text":{"text":"PING!"}}}\n' | nc.traditional -w 1 127.0.0.1 1337
+            ```            
+            
+    1.  Use Lua script.
+    
+        ```sh
+        telegram-bot -s script.lua
+        ```    
+    
+    To understand how to serialize commands you need to read examples and tl scheme.
 
 ### examples
 
-1.  Json response (prettyfied)
+1.  JSON response (prettyfied)
 
-    ```javascript
+    ```js
     {
       ["@type"] = "updateNewMessage",
       contains_mention = false,
@@ -262,3 +292,5 @@ To understand how to serialize commands you need to read examples and tl scheme.
       end
     end
     ```
+
+    See [https://github.com/rizaumami/tdbot.lua](https://github.com/rizaumami/tdbot.lua), a wrapper to simplify tdbot based bot development.
