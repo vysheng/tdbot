@@ -270,7 +270,7 @@ Note: On Ubuntu, `gperf` is in its universe repository. So, make sure to enable 
         local msg = data.message
 
         if msg.content["@type"] == "messageText" then
-          if msg.content.text == "ping" then
+          if msg.content.text.text == "ping" then
             assert (tdbot_function ({
               ["@type"] = "sendMessage",
               chat_id = msg.chat_id,
