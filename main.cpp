@@ -141,7 +141,7 @@ void parse_config () /* {{{ */ {
       std::cerr << "can not open config file '" << config_filename << "'\n";
       std::cerr << "diagnosis: " << e.what () << "\n";
       
-      exit (EXIT_FAILURE);
+      std::exit (EXIT_FAILURE);
     } else {
       std::cout << "config '" << config_filename << "' not found. Using default config\n";
     }
@@ -149,7 +149,7 @@ void parse_config () /* {{{ */ {
     std::cerr << "can not parse config file at " << e.getFile () << ":" << std::to_string (e.getLine ()) << "\n";
     std::cerr << "diagnosis: " << e.getError () << "\n";
 
-    exit (EXIT_FAILURE);
+    std::exit (EXIT_FAILURE);
   }
 
   if (profile.length () == 0) {
@@ -262,7 +262,7 @@ void usage () /* {{{ */ {
   << "  --login                              start in login mode\n"
   ;
 
-  exit (1);
+  std::exit (1);
 }
 /* }}} */ 
 
@@ -365,7 +365,7 @@ void termination_signal_handler (int signum) {
   backtrace_symbols_fd (buffer, calls, 1);
   #endif 
   
-  exit (EXIT_FAILURE);
+  std::_Exit (EXIT_FAILURE);
 }
 
 void main_loop() {
@@ -374,6 +374,8 @@ void main_loop() {
     file_log.init (logname);
     td::log_interface = &file_log;
   }
+
+  SET_VERBOSITY_LEVEL(VERBOSITY_NAME(FATAL) + verbosity);
 
   td::ConcurrentScheduler scheduler;
   scheduler.init(4);
@@ -387,6 +389,8 @@ void main_loop() {
 }
 
 int main (int argc, char *argv[]) {
+  SET_VERBOSITY_LEVEL(VERBOSITY_NAME(FATAL));
+
   td::setup_signals_alt_stack ().ensure ();
   td::set_signal_handler (td::SignalType::Abort, termination_signal_handler).ensure ();
   td::set_signal_handler (td::SignalType::Error, termination_signal_handler).ensure ();
@@ -402,14 +406,6 @@ int main (int argc, char *argv[]) {
       usage ();
     }
   }
-  
-  td::FileLog file_log;
-  if (logname.length () > 0) {
-    file_log.init(logname);
-    td::log_interface = &file_log;
-  }
-      
-  SET_VERBOSITY_LEVEL(VERBOSITY_NAME(FATAL) + verbosity);
   
   main_loop ();
 
