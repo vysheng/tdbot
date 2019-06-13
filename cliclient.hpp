@@ -38,6 +38,7 @@ class CliFd {
     CliFd() {}
     void work(td::uint64 id);
     virtual void write(std::string str) = 0;
+    virtual ~CliFd() = default;
   private:
     virtual void sock_read (td::uint64 id) = 0;
     virtual void sock_write (td::uint64 id) = 0;
@@ -46,16 +47,16 @@ class CliFd {
 
 class CliStdFd : public CliFd {
   public:
-    CliStdFd (td::Fd stdin_, td::Fd stdout_, CliClient *cli_);
+    explicit CliStdFd (CliClient *cli_);
     void write(std::string str) override {
       out_ += str + "\n";
     }
+    ~CliStdFd() override;
+
   private:
     void sock_read (td::uint64 id) override;
     void sock_write (td::uint64 id) override;
     void sock_close (td::uint64 id) override;
-    td::Fd stdin_;
-    td::Fd stdout_;
     CliClient *cli_;
     std::string in_;
     std::string out_;
@@ -68,10 +69,13 @@ class CliSockFd : public CliFd {
     void write(std::string str) override {
       out_ += str + "\n";
     }
+    ~CliSockFd() override;
+
   private:
     void sock_read (td::uint64 id) override;
     void sock_write (td::uint64 id) override;
     void sock_close (td::uint64 id) override;
+    void close ();
     td::SocketFd fd_;
     CliClient *cli_;
     std::string in_;
@@ -187,6 +191,8 @@ class CliClient final : public td::Actor {
     yield();
   }
   
+  void tear_down() override;
+
   void on_update (td::tl_object_ptr<td::td_api::Update> update);
   void on_result (td::uint64 id, td::tl_object_ptr<td::td_api::Object> result);
   void on_error (td::uint64 id, td::tl_object_ptr<td::td_api::error> error);
@@ -206,7 +212,7 @@ class CliClient final : public td::Actor {
   }
   
 
-  std::unique_ptr<td::TdCallback> make_td_callback();
+  td::unique_ptr<td::TdCallback> make_td_callback();
   
   void init_td() {
     td_ = td::create_actor<td::ClientActor>(td::Slice ("TDPROXY"), make_td_callback());

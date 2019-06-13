@@ -18,6 +18,8 @@
 #include "telegram.h"
 #include "cliclient.hpp"
 #include "clilua.hpp"
+
+#include "td/utils/port/StdStreams.h"
 #include "td/utils/Slice.h"
 
 void set_stdin_echo (bool enable) {
@@ -50,18 +52,24 @@ void set_stdin_echo (bool enable) {
 CliClient *CliClient::instance_ = nullptr;
 
 CliSockFd::CliSockFd(td::SocketFd fd, CliClient *cli) : fd_ (std::move (fd)), cli_ (cli) {
-  fd_.get_fd ().set_is_blocking (false).ensure ();
-  fd_.get_fd ().set_observer (cli);
-  subscribe(fd_.get_fd (), td::Fd::All);
+  fd_.get_native_fd ().set_is_blocking (false).ensure ();
+  td::Scheduler::subscribe(fd_.get_poll_info ().extract_pollable_fd (cli_), td::PollFlags::ReadWrite() | td::PollFlags::Close() | td::PollFlags::Error());
 }
 
-CliStdFd::CliStdFd(td::Fd stdinv, td::Fd stdoutv, CliClient *cli) : stdin_ (std::move (stdinv)), stdout_ (std::move (stdoutv)), cli_ (cli) {
-  stdin_.set_is_blocking (false).ensure ();
-  stdin_.set_observer (cli);
-  subscribe(stdin_, td::Fd::Read | td::Fd::Close | td::Fd::Error);
-  stdout_.set_is_blocking (false).ensure ();
-  stdout_.set_observer (cli);
-  subscribe(stdout_, td::Fd::Write | td::Fd::Close | td::Fd::Error);
+CliSockFd::~CliSockFd() {
+  close ();
+}
+
+CliStdFd::CliStdFd(CliClient *cli) : cli_ (cli) {
+  td::Stdin().get_native_fd ().set_is_blocking (false).ensure ();
+  td::Scheduler::subscribe(td::Stdin ().get_poll_info ().extract_pollable_fd (cli_), td::PollFlags::ReadWrite() | td::PollFlags::Close() | td::PollFlags::Error());
+  td::Stdout().get_native_fd ().set_is_blocking (false).ensure ();
+  td::Scheduler::subscribe(td::Stdout ().get_poll_info ().extract_pollable_fd (cli_), td::PollFlags::Write() | td::PollFlags::Close() | td::PollFlags::Error());
+}
+
+CliStdFd::~CliStdFd() {
+  td::Scheduler::unsubscribe(td::Stdin ().get_poll_info ().get_pollable_fd_ref ());
+  td::Scheduler::unsubscribe(td::Stdout ().get_poll_info ().get_pollable_fd_ref ());
 }
 
 void CliFd::work (td::uint64 id) {
@@ -97,10 +105,10 @@ void CliSockFd::sock_read (td::uint64 id) {
 }
 
 void CliStdFd::sock_read (td::uint64 id) {
-  while (!half_closed_ && td::can_read (stdin_)) {
+  while (!half_closed_ && td::can_read (td::Stdin())) {
     char sb[1024];
     td::MutableSlice s(sb, 1024);
-    auto res = stdin_.read (s);
+    auto res = td::Stdin().read (s);
 
     if (res.is_ok ()) {
       in_ += s.substr (0, res.ok ()).str ();
@@ -134,9 +142,9 @@ void CliSockFd::sock_write (td::uint64 id) {
 }
 
 void CliStdFd::sock_write (td::uint64 id) {
-  while (td::can_write (stdout_) && out_.length () > 0) {
+  while (td::can_write (td::Stdout()) && out_.length () > 0) {
     td::Slice s(out_);
-    auto res = stdout_.write (s);
+    auto res = td::Stdout().write (s);
 
     if (res.is_ok ()) {
       out_.erase (0, res.ok ());
@@ -146,26 +154,28 @@ void CliStdFd::sock_write (td::uint64 id) {
 
 void CliSockFd::sock_close (td::uint64 id) {
   if (td::can_close (fd_)) {
-    fd_.close ();
+    close ();
     cli_->del_fd (id);
+  }
+}
+
+void CliSockFd::close () {
+  if (!fd_.empty()) {
+    td::Scheduler::unsubscribe(fd_.get_poll_info ().get_pollable_fd_ref ());
+    fd_.close ();
   }
 }
 
 
 void CliStdFd::sock_close (td::uint64 id) {
-  if (!half_closed_ && td::can_close (stdin_)) {
-    stdin_.close ();
+  if (td::can_close (td::Stdin())) {
     half_closed_ = true;
   }
-  if (td::can_close (stdout_)) {
-    if (!half_closed_) {
-      stdin_.close ();
-    }
-    stdout_.close ();
+  if (td::can_close (td::Stdout())) {
+    half_closed_ = true;
     cli_->del_fd (id);
   }
 }
-
 
 void CliClient::authentificate_restart () {
   //send_request (td::make_tl_object<td::td_api::getAuthorizationState>(), std::make_unique<TdAuthorizationStateCallback>());
@@ -332,7 +342,7 @@ void CliClient::loop() {
   }
 }
 
-std::unique_ptr<td::TdCallback> CliClient::make_td_callback() {
+td::unique_ptr<td::TdCallback> CliClient::make_td_callback() {
   class TdCallbackImpl : public td::TdCallback {
     public:
       explicit TdCallbackImpl(CliClient *client) : client_(client) {
@@ -343,14 +353,14 @@ std::unique_ptr<td::TdCallback> CliClient::make_td_callback() {
       void on_error(td::uint64 id, td::tl_object_ptr<td::td_api::error> error) override {
         client_->on_error(id, std::move(error));
       }
-      void on_closed() override {
+      ~TdCallbackImpl() override {
         client_->on_closed ();
       }
 
     private:
       CliClient *client_;
   };
-  return std::make_unique<TdCallbackImpl>(this);
+  return td::make_unique<TdCallbackImpl>(this);
 }
 
 void CliClient::init() {
@@ -358,18 +368,14 @@ void CliClient::init() {
   init_td();
 
   if (!login_mode_) {
-    auto stdin_ = td::Fd::Stdin().clone();
-    auto stdout_ = td::Fd::Stdout().clone();
-
-    auto x = std::make_unique<CliStdFd>(std::move (stdin_), std::move (stdout_), this);
+    auto x = std::make_unique<CliStdFd>(this);
     fds_.create (std::move (x));
 
     if (port_ > 0) {
       auto r = td::ServerSocketFd::open (port_, addr_);
       if (r.is_ok ()) {
         listen_ = r.move_as_ok ();
-        listen_.get_fd ().set_observer (this);
-        subscribe(listen_.get_fd (), td::Fd::Read | td::Fd::Error | td::Fd::Close);
+        td::Scheduler::subscribe(listen_.get_poll_info ().extract_pollable_fd (this), td::PollFlags::ReadWrite() | td::PollFlags::Close() | td::PollFlags::Error());
       } else {
         LOG(FATAL) << "can not initialize listening socket on port " << port_;
       }
@@ -381,4 +387,10 @@ void CliClient::init() {
   }
 
   authentificate_restart (); 
+}
+
+void CliClient::tear_down() {
+  if (!listen_.empty()) {
+    td::Scheduler::unsubscribe(listen_.get_poll_info ().get_pollable_fd_ref ());
+  }
 }
