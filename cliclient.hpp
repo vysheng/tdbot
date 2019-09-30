@@ -17,8 +17,8 @@
 #include "auto/td/telegram/td_api.h"
 #include "auto/td/telegram/td_api.hpp"
 
-#include "td/tl/tl_json.h"
 #include "auto/td/telegram/td_api_json.h"
+#include "td/tl/tl_json.h"
 
 
 class CliLua;
@@ -181,6 +181,7 @@ class CliClient final : public td::Actor {
   void login_continue (const td::td_api::authorizationStateWaitTdlibParameters &result);
   void login_continue (const td::td_api::authorizationStateWaitPhoneNumber &result);
   void login_continue (const td::td_api::authorizationStateWaitCode &result);
+  void login_continue (const td::td_api::authorizationStateWaitRegistration &result);
   void login_continue (const td::td_api::authorizationStateWaitPassword &result);
   void login_continue (const td::td_api::authorizationStateLoggingOut &result);
   void login_continue (const td::td_api::authorizationStateWaitEncryptionKey &result);

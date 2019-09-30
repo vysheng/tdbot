@@ -195,7 +195,7 @@ void CliClient::login_continue (const td::td_api::authorizationStateWaitPhoneNum
     LOG(FATAL) << "not logged in. Try running with --login option";
   }
   if (phone_.length () > 0) {
-    send_request (td::make_tl_object<td::td_api::setAuthenticationPhoneNumber>(phone_, false, false), std::make_unique<TdAuthorizationStateCallback>());
+    send_request (td::make_tl_object<td::td_api::setAuthenticationPhoneNumber>(phone_, nullptr), std::make_unique<TdAuthorizationStateCallback>());
   } else {
     send_request (td::make_tl_object<td::td_api::checkAuthenticationBotToken>(bot_hash_), std::make_unique<TdAuthorizationStateCallback>());
   }
@@ -205,34 +205,32 @@ void CliClient::login_continue (const td::td_api::authorizationStateWaitCode &R)
   if (!login_mode_) {
     LOG(FATAL) << "not logged in. Try running with --login option";
   }
-  if (R.is_registered_) {
-    std::cout << "code: ";
-    set_stdin_echo (false);
-    std::string code;
-    std::getline (std::cin, code);
-    set_stdin_echo (true);
-    std::cout << "\n";
-    
-    send_request (td::make_tl_object<td::td_api::checkAuthenticationCode>(code,"",""), std::make_unique<TdAuthorizationStateCallback>());
-  } else {
-    std::string first_name;
-    std::string last_name;
 
-    std::cout << "not registered\n";
-    std::cout << "first name: ";
-    std::getline (std::cin, first_name);
-    std::cout << "last name: ";
-    std::getline (std::cin, last_name);
-    
-    std::cout << "code: ";
-    set_stdin_echo (false);
-    std::string code;
-    std::getline (std::cin, code);
-    set_stdin_echo (true);
-    std::cout << "\n";
-    
-    send_request (td::make_tl_object<td::td_api::checkAuthenticationCode>(code, first_name, last_name), std::make_unique<TdAuthorizationStateCallback>());
+  std::cout << "code: ";
+  set_stdin_echo (false);
+  std::string code;
+  std::getline (std::cin, code);
+  set_stdin_echo (true);
+  std::cout << "\n";
+
+  send_request (td::make_tl_object<td::td_api::checkAuthenticationCode>(code), std::make_unique<TdAuthorizationStateCallback>());
+}
+
+void CliClient::login_continue (const td::td_api::authorizationStateWaitRegistration &R) {
+  if (!login_mode_) {
+    LOG(FATAL) << "not logged in. Try running with --login option";
   }
+
+  std::string first_name;
+  std::string last_name;
+
+  std::cout << "not registered\n";
+  std::cout << "first name: ";
+  std::getline (std::cin, first_name);
+  std::cout << "last name: ";
+  std::getline (std::cin, last_name);
+
+  send_request (td::make_tl_object<td::td_api::registerUser>(first_name, last_name), std::make_unique<TdAuthorizationStateCallback>());
 }
 
 void CliClient::login_continue (const td::td_api::authorizationStateWaitPassword &result) {
