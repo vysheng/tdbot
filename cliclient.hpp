@@ -18,7 +18,6 @@
 #include "auto/td/telegram/td_api.hpp"
 
 #include "auto/td/telegram/td_api_json.h"
-#include "td/tl/tl_json.h"
 
 
 class CliLua;
@@ -144,11 +143,10 @@ class CliClient final : public td::Actor {
     auto res = td::json_decode (cmd);
    
     if (res.is_ok ()) {
-      auto as_json_value = res.move_as_ok ();
       td::tl_object_ptr<td::td_api::Function> object;
-      
-      auto r = from_json(object, as_json_value);
-      
+
+      auto r = from_json(object, res.move_as_ok ());
+
       if (r.is_ok ()) {
         send_request(std::move (object), std::make_unique<TdCmdCallback>(id,this));
         return;
@@ -180,6 +178,7 @@ class CliClient final : public td::Actor {
   void login_continue (const td::td_api::authorizationStateReady &result);
   void login_continue (const td::td_api::authorizationStateWaitTdlibParameters &result);
   void login_continue (const td::td_api::authorizationStateWaitPhoneNumber &result);
+  void login_continue (const td::td_api::authorizationStateWaitOtherDeviceConfirmation &result);
   void login_continue (const td::td_api::authorizationStateWaitCode &result);
   void login_continue (const td::td_api::authorizationStateWaitRegistration &result);
   void login_continue (const td::td_api::authorizationStateWaitPassword &result);

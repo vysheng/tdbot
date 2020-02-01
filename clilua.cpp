@@ -134,11 +134,9 @@ int lua_parse_function (lua_State *L) {
   auto res = td::json_decode (cmd);
 
   if (res.is_ok ()) {
-    auto as_json_value = res.move_as_ok ();
     td::tl_object_ptr<td::td_api::Function> object;
 
-    auto r = from_json(object, as_json_value);
-  
+    auto r = from_json(object, res.move_as_ok ());
 
     if (r.is_ok ()) {
       CliClient::instance_->send_request(std::move (object), std::make_unique<TdLuaCallback>(a1, a2, CliLua::instance_));

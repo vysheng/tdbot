@@ -201,6 +201,10 @@ void CliClient::login_continue (const td::td_api::authorizationStateWaitPhoneNum
   }
 }
 
+void CliClient::login_continue (const td::td_api::authorizationStateWaitOtherDeviceConfirmation &result) {
+  LOG(FATAL) << "unexpected authorization state";
+}
+
 void CliClient::login_continue (const td::td_api::authorizationStateWaitCode &R) {
   if (!login_mode_) {
     LOG(FATAL) << "not logged in. Try running with --login option";
@@ -279,7 +283,8 @@ void CliClient::on_update (td::tl_object_ptr<td::td_api::Update> update) {
     update = td::move_tl_object_as<td::td_api::Update>(t);
 
   }
-  std::string v = td::json_encode<std::string>(td::ToJson (update));
+  auto object = td::td_api::move_object_as<td::td_api::Object>(update);
+  std::string v = td::json_encode<std::string>(td::ToJson (object));
 
   fds_.for_each ([&](td::uint64 id, auto &x) {  
     x.get()->write (v);
