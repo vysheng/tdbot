@@ -13,6 +13,7 @@
 #include "td/telegram/TdParameters.h"
 #include "td/utils/FileLog.h"
 #include "td/actor/actor.h"
+#include "td/actor/ConcurrentScheduler.h"
 #include "td/utils/port/signals.h"
 #include "td/utils/port/path.h"
 

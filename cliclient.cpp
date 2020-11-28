@@ -73,13 +73,23 @@ CliStdFd::~CliStdFd() {
 }
 
 void CliFd::work (td::uint64 id) {
+  sock_sync ();
   sock_read (id);
   sock_write (id);
   sock_close (id);
 }
 
+void CliSockFd::sock_sync () {
+  td::sync_with_poll (fd_);
+}
+
+void CliStdFd::sock_sync () {
+  td::sync_with_poll (td::Stdin());
+  td::sync_with_poll (td::Stdout());
+}
+
 void CliSockFd::sock_read (td::uint64 id) {
-  while (td::can_read (fd_)) {
+  while (td::can_read_local (fd_)) {
     char sb[1024];
     td::MutableSlice s(sb, 1024);
     auto res = fd_.read (s);
@@ -105,7 +115,7 @@ void CliSockFd::sock_read (td::uint64 id) {
 }
 
 void CliStdFd::sock_read (td::uint64 id) {
-  while (!half_closed_ && td::can_read (td::Stdin())) {
+  while (!half_closed_ && td::can_read_local (td::Stdin())) {
     char sb[1024];
     td::MutableSlice s(sb, 1024);
     auto res = td::Stdin().read (s);
@@ -131,7 +141,7 @@ void CliStdFd::sock_read (td::uint64 id) {
 }
 
 void CliSockFd::sock_write (td::uint64 id) {
-  while (td::can_write (fd_) && out_.length () > 0) {
+  while (td::can_write_local (fd_) && out_.length () > 0) {
     td::Slice s(out_);
     auto res = fd_.write (s);
 
@@ -142,7 +152,7 @@ void CliSockFd::sock_write (td::uint64 id) {
 }
 
 void CliStdFd::sock_write (td::uint64 id) {
-  while (td::can_write (td::Stdout()) && out_.length () > 0) {
+  while (td::can_write_local (td::Stdout()) && out_.length () > 0) {
     td::Slice s(out_);
     auto res = td::Stdout().write (s);
 
@@ -153,7 +163,7 @@ void CliStdFd::sock_write (td::uint64 id) {
 }
 
 void CliSockFd::sock_close (td::uint64 id) {
-  if (td::can_close (fd_)) {
+  if (td::can_close_local (fd_)) {
     close ();
     cli_->del_fd (id);
   }
@@ -168,10 +178,10 @@ void CliSockFd::close () {
 
 
 void CliStdFd::sock_close (td::uint64 id) {
-  if (td::can_close (td::Stdin())) {
+  if (td::can_close_local (td::Stdin())) {
     half_closed_ = true;
   }
-  if (td::can_close (td::Stdout())) {
+  if (td::can_close_local (td::Stdout())) {
     half_closed_ = true;
     cli_->del_fd (id);
   }
@@ -322,7 +332,8 @@ void CliClient::loop() {
   }
 
   if (port_ > 0) {
-    while (td::can_read (listen_)) {
+    td::sync_with_poll (listen_);
+    while (td::can_read_local (listen_)) {
       auto r = listen_.accept ();
       if (r.is_ok ()) {
         auto x = std::make_unique<CliSockFd>(r.move_as_ok (), this);
@@ -330,7 +341,7 @@ void CliClient::loop() {
         LOG(INFO) << "accepted connection\n";
       }
     }
-    if (td::can_close (listen_)) {
+    if (td::can_close_local (listen_)) {
       LOG(FATAL) << "listening socket unexpectedly closed\n";
     }
   }

@@ -1,14 +1,11 @@
 cmake_minimum_required(VERSION 2.8)
 
-set (CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/CMake" ${CMAKE_MODULE_PATH})
-
 add_subdirectory("td/")
 include_directories ("td/")
 include_directories ("td/tdactor/")
 include_directories ("td/tdutils/")
 include_directories ("td/tdtl/")
 include_directories ("td/td/generate/")
-include_directories ("td/td/generate/default_td_api/")
 include_directories($<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}>/td/tdutils)
 link_directories ("/opt/local/lib/")
 

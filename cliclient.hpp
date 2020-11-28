@@ -39,6 +39,7 @@ class CliFd {
     virtual void write(std::string str) = 0;
     virtual ~CliFd() = default;
   private:
+    virtual void sock_sync () = 0;
     virtual void sock_read (td::uint64 id) = 0;
     virtual void sock_write (td::uint64 id) = 0;
     virtual void sock_close (td::uint64 id) = 0;
@@ -53,6 +54,7 @@ class CliStdFd : public CliFd {
     ~CliStdFd() override;
 
   private:
+    void sock_sync () override;
     void sock_read (td::uint64 id) override;
     void sock_write (td::uint64 id) override;
     void sock_close (td::uint64 id) override;
@@ -71,6 +73,7 @@ class CliSockFd : public CliFd {
     ~CliSockFd() override;
 
   private:
+    void sock_sync () override;
     void sock_read (td::uint64 id) override;
     void sock_write (td::uint64 id) override;
     void sock_close (td::uint64 id) override;
