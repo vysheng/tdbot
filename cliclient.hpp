@@ -17,7 +17,6 @@
 #include "auto/td/telegram/td_api.h"
 #include "auto/td/telegram/td_api.hpp"
 
-#include "td/tl/tl_json.h"
 #include "auto/td/telegram/td_api_json.h"
 
 
@@ -40,6 +39,7 @@ class CliFd {
     virtual void write(std::string str) = 0;
     virtual ~CliFd() = default;
   private:
+    virtual void sock_sync () = 0;
     virtual void sock_read (td::uint64 id) = 0;
     virtual void sock_write (td::uint64 id) = 0;
     virtual void sock_close (td::uint64 id) = 0;
@@ -54,6 +54,7 @@ class CliStdFd : public CliFd {
     ~CliStdFd() override;
 
   private:
+    void sock_sync () override;
     void sock_read (td::uint64 id) override;
     void sock_write (td::uint64 id) override;
     void sock_close (td::uint64 id) override;
@@ -72,6 +73,7 @@ class CliSockFd : public CliFd {
     ~CliSockFd() override;
 
   private:
+    void sock_sync () override;
     void sock_read (td::uint64 id) override;
     void sock_write (td::uint64 id) override;
     void sock_close (td::uint64 id) override;
@@ -144,11 +146,10 @@ class CliClient final : public td::Actor {
     auto res = td::json_decode (cmd);
    
     if (res.is_ok ()) {
-      auto as_json_value = res.move_as_ok ();
       td::tl_object_ptr<td::td_api::Function> object;
-      
-      auto r = from_json(object, as_json_value);
-      
+
+      auto r = from_json(object, res.move_as_ok ());
+
       if (r.is_ok ()) {
         send_request(std::move (object), std::make_unique<TdCmdCallback>(id,this));
         return;
@@ -180,7 +181,9 @@ class CliClient final : public td::Actor {
   void login_continue (const td::td_api::authorizationStateReady &result);
   void login_continue (const td::td_api::authorizationStateWaitTdlibParameters &result);
   void login_continue (const td::td_api::authorizationStateWaitPhoneNumber &result);
+  void login_continue (const td::td_api::authorizationStateWaitOtherDeviceConfirmation &result);
   void login_continue (const td::td_api::authorizationStateWaitCode &result);
+  void login_continue (const td::td_api::authorizationStateWaitRegistration &result);
   void login_continue (const td::td_api::authorizationStateWaitPassword &result);
   void login_continue (const td::td_api::authorizationStateLoggingOut &result);
   void login_continue (const td::td_api::authorizationStateWaitEncryptionKey &result);

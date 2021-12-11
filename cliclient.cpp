@@ -73,13 +73,23 @@ CliStdFd::~CliStdFd() {
 }
 
 void CliFd::work (td::uint64 id) {
+  sock_sync ();
   sock_read (id);
   sock_write (id);
   sock_close (id);
 }
 
+void CliSockFd::sock_sync () {
+  td::sync_with_poll (fd_);
+}
+
+void CliStdFd::sock_sync () {
+  td::sync_with_poll (td::Stdin());
+  td::sync_with_poll (td::Stdout());
+}
+
 void CliSockFd::sock_read (td::uint64 id) {
-  while (td::can_read (fd_)) {
+  while (td::can_read_local (fd_)) {
     char sb[1024];
     td::MutableSlice s(sb, 1024);
     auto res = fd_.read (s);
@@ -105,7 +115,7 @@ void CliSockFd::sock_read (td::uint64 id) {
 }
 
 void CliStdFd::sock_read (td::uint64 id) {
-  while (!half_closed_ && td::can_read (td::Stdin())) {
+  while (!half_closed_ && td::can_read_local (td::Stdin())) {
     char sb[1024];
     td::MutableSlice s(sb, 1024);
     auto res = td::Stdin().read (s);
@@ -131,7 +141,7 @@ void CliStdFd::sock_read (td::uint64 id) {
 }
 
 void CliSockFd::sock_write (td::uint64 id) {
-  while (td::can_write (fd_) && out_.length () > 0) {
+  while (td::can_write_local (fd_) && out_.length () > 0) {
     td::Slice s(out_);
     auto res = fd_.write (s);
 
@@ -142,7 +152,7 @@ void CliSockFd::sock_write (td::uint64 id) {
 }
 
 void CliStdFd::sock_write (td::uint64 id) {
-  while (td::can_write (td::Stdout()) && out_.length () > 0) {
+  while (td::can_write_local (td::Stdout()) && out_.length () > 0) {
     td::Slice s(out_);
     auto res = td::Stdout().write (s);
 
@@ -153,7 +163,7 @@ void CliStdFd::sock_write (td::uint64 id) {
 }
 
 void CliSockFd::sock_close (td::uint64 id) {
-  if (td::can_close (fd_)) {
+  if (td::can_close_local (fd_)) {
     close ();
     cli_->del_fd (id);
   }
@@ -168,10 +178,10 @@ void CliSockFd::close () {
 
 
 void CliStdFd::sock_close (td::uint64 id) {
-  if (td::can_close (td::Stdin())) {
+  if (td::can_close_local (td::Stdin())) {
     half_closed_ = true;
   }
-  if (td::can_close (td::Stdout())) {
+  if (td::can_close_local (td::Stdout())) {
     half_closed_ = true;
     cli_->del_fd (id);
   }
@@ -195,44 +205,46 @@ void CliClient::login_continue (const td::td_api::authorizationStateWaitPhoneNum
     LOG(FATAL) << "not logged in. Try running with --login option";
   }
   if (phone_.length () > 0) {
-    send_request (td::make_tl_object<td::td_api::setAuthenticationPhoneNumber>(phone_, false, false), std::make_unique<TdAuthorizationStateCallback>());
+    send_request (td::make_tl_object<td::td_api::setAuthenticationPhoneNumber>(phone_, nullptr), std::make_unique<TdAuthorizationStateCallback>());
   } else {
     send_request (td::make_tl_object<td::td_api::checkAuthenticationBotToken>(bot_hash_), std::make_unique<TdAuthorizationStateCallback>());
   }
+}
+
+void CliClient::login_continue (const td::td_api::authorizationStateWaitOtherDeviceConfirmation &result) {
+  LOG(FATAL) << "unexpected authorization state";
 }
 
 void CliClient::login_continue (const td::td_api::authorizationStateWaitCode &R) {
   if (!login_mode_) {
     LOG(FATAL) << "not logged in. Try running with --login option";
   }
-  if (R.is_registered_) {
-    std::cout << "code: ";
-    set_stdin_echo (false);
-    std::string code;
-    std::getline (std::cin, code);
-    set_stdin_echo (true);
-    std::cout << "\n";
-    
-    send_request (td::make_tl_object<td::td_api::checkAuthenticationCode>(code,"",""), std::make_unique<TdAuthorizationStateCallback>());
-  } else {
-    std::string first_name;
-    std::string last_name;
 
-    std::cout << "not registered\n";
-    std::cout << "first name: ";
-    std::getline (std::cin, first_name);
-    std::cout << "last name: ";
-    std::getline (std::cin, last_name);
-    
-    std::cout << "code: ";
-    set_stdin_echo (false);
-    std::string code;
-    std::getline (std::cin, code);
-    set_stdin_echo (true);
-    std::cout << "\n";
-    
-    send_request (td::make_tl_object<td::td_api::checkAuthenticationCode>(code, first_name, last_name), std::make_unique<TdAuthorizationStateCallback>());
+  std::cout << "code: ";
+  set_stdin_echo (false);
+  std::string code;
+  std::getline (std::cin, code);
+  set_stdin_echo (true);
+  std::cout << "\n";
+
+  send_request (td::make_tl_object<td::td_api::checkAuthenticationCode>(code), std::make_unique<TdAuthorizationStateCallback>());
+}
+
+void CliClient::login_continue (const td::td_api::authorizationStateWaitRegistration &R) {
+  if (!login_mode_) {
+    LOG(FATAL) << "not logged in. Try running with --login option";
   }
+
+  std::string first_name;
+  std::string last_name;
+
+  std::cout << "not registered\n";
+  std::cout << "first name: ";
+  std::getline (std::cin, first_name);
+  std::cout << "last name: ";
+  std::getline (std::cin, last_name);
+
+  send_request (td::make_tl_object<td::td_api::registerUser>(first_name, last_name), std::make_unique<TdAuthorizationStateCallback>());
 }
 
 void CliClient::login_continue (const td::td_api::authorizationStateWaitPassword &result) {
@@ -281,7 +293,8 @@ void CliClient::on_update (td::tl_object_ptr<td::td_api::Update> update) {
     update = td::move_tl_object_as<td::td_api::Update>(t);
 
   }
-  std::string v = td::json_encode<std::string>(td::ToJson (update));
+  auto object = td::td_api::move_object_as<td::td_api::Object>(update);
+  std::string v = td::json_encode<std::string>(td::ToJson (object));
 
   fds_.for_each ([&](td::uint64 id, auto &x) {  
     x.get()->write (v);
@@ -319,7 +332,8 @@ void CliClient::loop() {
   }
 
   if (port_ > 0) {
-    while (td::can_read (listen_)) {
+    td::sync_with_poll (listen_);
+    while (td::can_read_local (listen_)) {
       auto r = listen_.accept ();
       if (r.is_ok ()) {
         auto x = std::make_unique<CliSockFd>(r.move_as_ok (), this);
@@ -327,7 +341,7 @@ void CliClient::loop() {
         LOG(INFO) << "accepted connection\n";
       }
     }
-    if (td::can_close (listen_)) {
+    if (td::can_close_local (listen_)) {
       LOG(FATAL) << "listening socket unexpectedly closed\n";
     }
   }
